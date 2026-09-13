@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      加速度センサーを必須ハードウェアとして要求する。
+      required="false" にすればセンサー非搭載機でも一覧には出るが、
+      本アプリは加速度センサー前提なので true のままにしている。
+    -->
+    <uses-feature
+        android:name="android.hardware.sensor.accelerometer"
+        android:required="true" />
+
+    <!--
+      Android 12(API 31)以降、200Hzを超えるサンプリング要求
+      (SENSOR_DELAY_FASTEST を含む)を行うには、この「normal」権限の
+      宣言が必須になった(実行時ダイアログは出ない。マニフェスト宣言のみで
+      インストール時に自動的に許可される)。
+      未宣言のままSENSOR_DELAY_FASTESTを要求すると
+      "SecurityException: To use the sampling rate of 0 microseconds,
+       app needs to declare the normal permission HIGH_SAMPLING_RATE_SENSORS"
+      が発生する。
+    -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+
+    <!-- CSV保存・K-NETファイル読込は SAF / アプリ専用領域のみを使うため、
+         ストレージ関連の実行時権限(READ/WRITE_EXTERNAL_STORAGE)は不要。 -->
+
+    <application
+        android:allowBackup="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.RtIntensity"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".validation.ValidationActivity"
+            android:exported="false"
+            android:label="@string/validation_title" />
+
+    </application>
+</manifest>
