@@ -1,0 +1,43 @@
+# このファイルは GitHub公式の Android.gitignore テンプレート
+# (https://github.com/github/gitignore/blob/main/Android.gitignore)
+# をベースにしている。ビルド生成物・IDEローカル設定・端末固有情報など、
+# 「他の人の環境では意味を持たない、または再生成可能なファイル」を除外する。
+
+# Gradle files
+.gradle/
+build/
+.kotlin/
+
+# Local configuration file (SDK path, etc) - 環境固有のため絶対にコミットしない
+local.properties
+
+# Log/OS Files
+*.log
+.DS_Store
+
+# Android Studio generated files and folders
+captures/
+.externalNativeBuild/
+.cxx/
+*.aab
+*.apk
+output-metadata.json
+
+# IntelliJ / Android Studio project-local settings
+*.iml
+.idea/
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# Keystore files (署名鍵。本プロジェクトでは使用していないが念のため除外)
+*.jks
+*.keystore
+
+# Google Services / Firebase等の認証情報
+# (本プロジェクトはFirebase等を一切使用していないが、
+#  将来誤って追加コミットされることを防ぐため明示的に除外しておく)
+google-services.json
+
+# Android Profiling
+*.hprof

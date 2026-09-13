@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">簡易リアルタイム震度計(参考値)</string>
+    <string name="validation_title">オフライン検証(K-NET/KiK-net)</string>
+
+    <string name="btn_start">計測開始</string>
+    <string name="btn_stop">計測停止</string>
+    <string name="btn_validation">オフライン検証モードを開く</string>
+
+    <string name="label_intensity">リアルタイム震度相当値(参考値)</string>
+    <string name="label_disclaimer">
+        本アプリはスマートフォン内蔵センサーによる参考値であり、気象庁が発表する
+        正式な震度と一致することを保証するものではありません。
+    </string>
+</resources>

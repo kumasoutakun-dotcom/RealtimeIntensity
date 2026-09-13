@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/textIntensityLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/label_intensity"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/textIntensityValue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="--"
+        android:textSize="56sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/textDisclaimer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/label_disclaimer"
+        android:textSize="11sp"
+        android:textColor="#808080" />
+
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:columnCount="2">
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="X軸加速度(gal)" android:layout_column="0" android:layout_row="0"/>
+        <TextView android:id="@+id/textAx" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00" android:layout_column="1" android:layout_row="0"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Y軸加速度(gal)" android:layout_column="0" android:layout_row="1"/>
+        <TextView android:id="@+id/textAy" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00" android:layout_column="1" android:layout_row="1"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Z軸加速度(gal)" android:layout_column="0" android:layout_row="2"/>
+        <TextView android:id="@+id/textAz" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00" android:layout_column="1" android:layout_row="2"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="3軸合成(フィルタ後,gal)" android:layout_column="0" android:layout_row="3"/>
+        <TextView android:id="@+id/textCombined" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00" android:layout_column="1" android:layout_row="3"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="サンプリング周波数" android:layout_column="0" android:layout_row="4"/>
+        <TextView android:id="@+id/textSampleRate" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- Hz" android:layout_column="1" android:layout_row="4"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="センサー状態" android:layout_column="0" android:layout_row="5"/>
+        <TextView android:id="@+id/textSensorStatus" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="未取得" android:layout_column="1" android:layout_row="5"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="静止時オフセット(平均±標準偏差,gal)" android:layout_column="0" android:layout_row="6"/>
+        <TextView android:id="@+id/textCalibration" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="計測中..." android:layout_column="1" android:layout_row="6"/>
+
+    </GridLayout>
+
+    <com.example.rtintensity.ui.WaveformView
+        android:id="@+id/waveformRaw"
+        android:layout_width="match_parent"
+        android:layout_height="140dp"
+        android:layout_marginTop="16dp" />
+    <TextView
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="生の3軸合成加速度(フィルタ前)" android:textSize="11sp"/>
+
+    <com.example.rtintensity.ui.WaveformView
+        android:id="@+id/waveformFiltered"
+        android:layout_width="match_parent"
+        android:layout_height="140dp"
+        android:layout_marginTop="8dp" />
+    <TextView
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="フィルタ後の3軸合成加速度" android:textSize="11sp"/>
+
+    <com.example.rtintensity.ui.WaveformView
+        android:id="@+id/waveformIntensity"
+        android:layout_width="match_parent"
+        android:layout_height="140dp"
+        android:layout_marginTop="8dp" />
+    <TextView
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="リアルタイム震度相当値の推移" android:textSize="11sp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/buttonStartStop"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/btn_start" />
+
+        <Button
+            android:id="@+id/buttonValidation"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/btn_validation" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/textRecordingStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text=""
+        android:textSize="12sp" />
+
+</LinearLayout>
+</ScrollView>
