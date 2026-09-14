@@ -1,0 +1,5 @@
+# Gradle Wrapperのスクリプトが、Windows上でのチェックアウト時にCRLFへ
+# 自動変換されて壊れる(シバン行が壊れて実行できなくなる)ことを防ぐ。
+gradlew text eol=lf
+gradlew.bat text eol=crlf
+*.jar binary

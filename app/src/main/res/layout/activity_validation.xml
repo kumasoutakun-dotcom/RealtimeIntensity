@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="K-NET/KiK-net ASCII形式の3成分ファイル(N-S, E-W, U-D)を選択してください。同一観測点・同一区間・同一サンプリング周波数のファイルを想定しています。"
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/buttonPickNS"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="N-S成分ファイルを選択" />
+
+    <Button
+        android:id="@+id/buttonPickEW"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="E-W成分ファイルを選択" />
+
+    <Button
+        android:id="@+id/buttonPickUD"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="U-D成分ファイルを選択" />
+
+    <TextView
+        android:id="@+id/textPickedFiles"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/buttonRun"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="検証を実行" />
+
+    <TextView
+        android:id="@+id/textResult"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:textIsSelectable="true"
+        android:fontFamily="monospace"
+        android:textSize="12sp" />
+
+</LinearLayout>
+</ScrollView>
