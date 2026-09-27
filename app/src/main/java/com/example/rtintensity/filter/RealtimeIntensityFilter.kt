@@ -51,6 +51,19 @@ class RealtimeIntensityFilter {
         stage4.resetState(); stage5.resetState(); stage6.resetState()
     }
 
+    /**
+     * 現在の入力が定常値であると仮定し、その値を仮想的に複数サンプル入力して
+     * IIRフィルタの内部状態を定常状態へ近づける。
+     *
+     * 実測データとしては扱わないため、呼び出し元で本番計測開始前にのみ使う。
+     */
+    fun prime(inputGal: Double, sampleCount: Int) {
+        if (sampleCount <= 0) return
+        repeat(sampleCount) {
+            process(inputGal)
+        }
+    }
+
     /** xGal: 加速度[gal]の生値(重力込みでよい。理由はクラスコメント参照)。戻り値もgal。 */
     fun process(xGal: Double): Double {
         var v = stage1.process(xGal)

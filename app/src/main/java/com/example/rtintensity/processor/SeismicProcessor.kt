@@ -33,6 +33,10 @@ data class ProcessedSample(
  *       誤検知の原因になる。)
  *   3) 3成分を sqrt(x^2+y^2+z^2) で合成
  *   4) [IntensityCalculator] でリアルタイム震度相当値を計算
+ *
+ * 計測開始直後のIIRフィルタ過渡応答を避けるため、実測処理へ入る前に
+ * 1秒間だけ各軸の生加速度を観測し、その平均値を仮想入力としてフィルタを
+ * プライミングする。ウォームアップ中の値は震度計算・PGA・CSVへ流さない。
  * という一連の処理をまとめるクラス。
  */
 class SeismicProcessor {
@@ -47,8 +51,21 @@ class SeismicProcessor {
     private var smoothedSampleRateHz: Double = Double.NaN
     private var smoothedDtSeconds: Double = Double.NaN
 
+    // 計測開始直後は1秒分の生加速度を観測し、各軸の平均値で
+    // IIRフィルタをプライミングしてから本番計測へ移行する。
+    private var warmingUp = true
+    private var warmupStartTimestampNanos: Long = -1L
+    private var warmupSumXGal = 0.0
+    private var warmupSumYGal = 0.0
+    private var warmupSumZGal = 0.0
+    private var warmupSampleCount = 0
+
     companion object {
         const val MS2_TO_GAL = 100.0 // 1 m/s^2 = 100 gal
+        private const val WARMUP_SECONDS = 1.0
+        // 起動時のフィルタ過渡応答が十分小さくなるまで、平均値を
+        // 実測ではない仮想サンプルとして流し込む。
+        private const val FILTER_PRIME_SECONDS = 5.0
 
         /**
          * フィルタ係数・IntensityCalculatorのウィンドウ長計算に使う
@@ -79,6 +96,13 @@ class SeismicProcessor {
         lastTimestampNanos = -1L
         smoothedSampleRateHz = Double.NaN
         smoothedDtSeconds = Double.NaN
+
+        warmingUp = true
+        warmupStartTimestampNanos = -1L
+        warmupSumXGal = 0.0
+        warmupSumYGal = 0.0
+        warmupSumZGal = 0.0
+        warmupSampleCount = 0
     }
 
     /**
@@ -89,6 +113,9 @@ class SeismicProcessor {
     fun onNewSample(ax: Float, ay: Float, az: Float, timestampNanos: Long): ProcessedSample? {
         if (lastTimestampNanos < 0L) {
             lastTimestampNanos = timestampNanos
+            if (warmingUp) {
+                warmupStartTimestampNanos = timestampNanos
+            }
             return null // 最初の1サンプルは dt が定義できないので処理をスキップする
         }
         val dtSeconds = (timestampNanos - lastTimestampNanos) / 1_000_000_000.0
@@ -126,6 +153,49 @@ class SeismicProcessor {
         val axGal = ax * MS2_TO_GAL
         val ayGal = ay * MS2_TO_GAL
         val azGal = az * MS2_TO_GAL
+
+        // 計測開始直後の最初の1秒は、各軸の平均値だけを集める。
+        // この間はフィルタの出力を本番データとして扱わない。
+        if (warmingUp) {
+            if (warmupStartTimestampNanos < 0L) {
+                warmupStartTimestampNanos = timestampNanos
+            }
+            warmupSumXGal += axGal
+            warmupSumYGal += ayGal
+            warmupSumZGal += azGal
+            warmupSampleCount++
+
+            val elapsedWarmupSeconds =
+                (timestampNanos - warmupStartTimestampNanos) / 1_000_000_000.0
+            if (elapsedWarmupSeconds < WARMUP_SECONDS) {
+                return null
+            }
+
+            if (warmupSampleCount > 0 && smoothedDtSeconds.isFinite() && smoothedDtSeconds > 0.0) {
+                val meanXGal = warmupSumXGal / warmupSampleCount
+                val meanYGal = warmupSumYGal / warmupSampleCount
+                val meanZGal = warmupSumZGal / warmupSampleCount
+                val primeSamples = maxOf(
+                    1,
+                    kotlin.math.ceil(FILTER_PRIME_SECONDS / smoothedDtSeconds).toInt()
+                )
+
+                filterX.prime(meanXGal, primeSamples)
+                filterY.prime(meanYGal, primeSamples)
+                filterZ.prime(meanZGal, primeSamples)
+            }
+
+            warmingUp = false
+            warmupStartTimestampNanos = -1L
+            warmupSumXGal = 0.0
+            warmupSumYGal = 0.0
+            warmupSumZGal = 0.0
+            warmupSampleCount = 0
+
+            // 1秒分の観測データとプライミング出力は、本番計測には含めない。
+            // 次の実測サンプルから通常のフィルタ処理・震度計算・CSV保存を開始する。
+            return null
+        }
 
         val fx = filterX.process(axGal)
         val fy = filterY.process(ayGal)

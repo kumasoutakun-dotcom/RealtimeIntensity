@@ -12,8 +12,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.rtintensity.color.IntensityClassColors
 import com.example.rtintensity.color.KyoshinShindoColorMap
+import com.example.rtintensity.processor.IntensityClass
 import com.example.rtintensity.processor.CalibrationMonitor
-import com.example.rtintensity.processor.HysteresisIntensityClassifier
 import com.example.rtintensity.processor.ProcessedSample
 import com.example.rtintensity.processor.SeismicProcessor
 import com.example.rtintensity.recorder.CsvRecorder
@@ -63,7 +63,7 @@ class MainActivity : AppCompatActivity() {
     private val xyzWaveformUpdateIntervalMillis = 100L
     private var lastXyzWaveformUpdateElapsedMillis = 0L
 
-    // ---- 震度階級・計測震度相当・加速度・履歴帯の更新スロットリング ----
+    // ---- 震度表示の更新スロットリング ----
     // 【ノイズ対策タスクでの変更】
     // 実機(Nothing Phone (3a))で、震度階級・数値・色・履歴帯が
     // 頻繁に変化してチカチカする問題があった。調査の結果、これらは
@@ -85,10 +85,32 @@ class MainActivity : AppCompatActivity() {
     private val intensityDisplayUpdateIntervalMillis = 1000L
     private var lastIntensityDisplayUpdateElapsedMillis = 0L
 
-    // 表示用震度階級のヒステリシス(要件6: 震度階級のチカチカ対策)。
-    // 上昇は即座、下降は3回連続(≒3秒、上記1Hzでの呼び出し前提)で確認後に反映する。
-    // 詳細な設計理由は HysteresisIntensityClassifier のコメントを参照。
-    private val hysteresisClassifier = HysteresisIntensityClassifier()
+    // ---- PGA(1Hz色バー)用: 直近1秒間の combinedGal 最大値を集計する(仕様変更) ----
+    // combinedGal(フィルタ後3軸合成の瞬時値)は handleSample() (センサー用の
+    // 専用バックグラウンドスレッド)側で毎サンプル届くのに対し、PGA表示は
+    // updateIntensityDisplayExtension() (UIスレッド、約1Hzに間引き済み)側で
+    // 「直近1秒間の最大値」として読み出す。異なるスレッド間でDouble(8バイト)を
+    // 素の var でやり取りするとJVM上でアトミック性・可視性が保証されないため、
+    // ビットパターンをAtomicLongに載せてCAS(compare-and-set)で最大値を更新する
+    // (下の sampleCounter と同じAtomicLongを使う方針を踏襲)。
+    // 【簡略化として明記する点】
+    // これは「1Hzタイマーが読み出すたびに0へリセットする」単純な集計(tumbling
+    // window)であり、常に厳密に直近1.000秒間の値というわけではない
+    // (次のリセットまでの実際の間隔は intensityDisplayUpdateIntervalMillis の
+    // 呼び出しタイミング次第で多少前後する)。震度相当値の計算には使わない、
+    // UI表示専用の集計値。
+    private val pgaWindowMaxGalBits = AtomicLong(0L)
+
+    /** combinedGal の新しいサンプルが来るたびに呼ぶ。直近1秒集計用の最大値をスレッドセーフに更新する。 */
+    private fun updatePgaWindowMax(candidateGal: Double) {
+        while (true) {
+            val currentBits = pgaWindowMaxGalBits.get()
+            val current = java.lang.Double.longBitsToDouble(currentBits)
+            if (candidateGal <= current) return
+            val newBits = java.lang.Double.doubleToLongBits(candidateGal)
+            if (pgaWindowMaxGalBits.compareAndSet(currentBits, newBits)) return
+        }
+    }
 
     // ---- デバッグログ(要件6)用のカウンタ ----
     private val sampleCounter = AtomicLong(0)
@@ -152,7 +174,7 @@ class MainActivity : AppCompatActivity() {
         lastUiUpdateElapsedMillis = 0L
         lastXyzWaveformUpdateElapsedMillis = 0L
         lastIntensityDisplayUpdateElapsedMillis = 0L
-        hysteresisClassifier.reset()
+        pgaWindowMaxGalBits.set(0L)
         intensityHistoryBand.clear()
         waveformXyz.clearAll()
 
@@ -204,7 +226,11 @@ class MainActivity : AppCompatActivity() {
             )
             val sample = processor.onNewSample(ax, ay, az, timestampNanos) ?: return
 
-            // CSV保存は要件どおり毎サンプル行う(間引かない)。
+            // PGA(1Hz色バー)用の「直近1秒間の最大値」集計は、UIスレッドの間引きとは
+            // 無関係に全サンプルに対して行う(仕様変更)。
+            updatePgaWindowMax(sample.combinedGal)
+
+            // CSV保存は要件どおり毎サンプル行う(間引かない、フォーマットも変更なし)。
             csvRecorder.append(sample)
 
             val nowElapsed = SystemClock.elapsedRealtime()
@@ -257,18 +283,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 震度表示拡張(震度階級バッジ・計測震度相当・加速度・履歴帯・XYZ加速度波形)の更新。
+     * 震度表示拡張(震度階級バッジ・計測震度相当・リアルタイム震度・PGA・
+     * リアルタイム加速度・履歴帯・XYZ加速度波形)の更新。
      *
      * 【内部連続値と表示値の厳格な分離】
-     * 震度階級の判定(ヒステリシス適用前の生の階級)には sample.rawIntensity
-     * (丸め前)を使う。sample.roundedIntensity(気象庁式に丸めた表示専用の値)は、
-     * このメソッドの中では判定・色付けに一切使わない。
+     * 震度階級の判定には sample.rawIntensity (丸め前)を使う。
+     * sample.roundedIntensity (気象庁式に丸めた表示専用の値)は、
+     * このメソッドの中では判定・色付けに使わない。
      *
-     * 【更新頻度(ノイズ対策タスクでの変更)】
-     * XYZ加速度波形は従来どおり最大10Hz。震度階級バッジ・計測震度相当・加速度・
-     * 下線色・履歴帯は、チカチカ対策として約1Hzに間引く(このメソッドが
-     * 呼ばれる頻度自体は従来どおり最大30Hzのままだが、その中でさらに
-     * 2つの独立したタイマーでネストして間引いている)。
+     * 【仕様変更: 値の用途とUIへの受け渡しの整理】
+     * 震度計算アルゴリズム自体(RealtimeIntensityFilter・IntensityCalculator)は
+     * 一切変更していない。変更したのは「どの値をどの表示にどの頻度で渡すか」のみ。
+     *   - リアルタイム加速度(textMeasuredAcceleration, 数値, 約30Hz):
+     *     sample.combinedGal(フィルタ後3軸合成の瞬時値)をそのまま表示する。
+     *     【確定事項・変更理由】従来はここに sample.pgaEquivalentGal
+     *     (震度算出用の代表振幅)を表示していたが、現在は combinedGal の
+     *     瞬時値に変更し、この数値は常に「今」を表す。
+     *   - PGA(underlineMeasuredAcceleration, 色バー, 1Hz):
+     *     updatePgaWindowMax() が集計した「直近1秒間のcombinedGal最大値」を
+     *     KyoshinShindoColorMap.colorForPga() に渡す。震度算出には使わない、
+     *     UI表示専用の集計値(sample.pgaEquivalentGalとは別物)。
+     *   - リアルタイム震度(textMeasuredIntensity, 数値, 約30Hz):
+     *     sample.rawIntensity (現在サンプルから直接算出した、丸め前の
+     *     震度相当値)をそのまま表示する。
+     *   - 計測震度相当(underlineMeasuredIntensity, 色バー, 1Hz):
+     *     リアルタイム震度と同じsample.rawIntensityから色を算出する。
+     *     色バーの更新頻度のみ1Hzに保つ(チカチカ対策、従来どおり)。
+     *   - 震度階級(textIntensityClassBadge・intensityHistoryBand,
+     *     バッジ+履歴帯, 1Hz): sample.rawIntensityから直接判定する。
+     *     表示更新は従来どおり1Hzのままにして、表示上のチカチカを抑える。
+     *
+     * 【更新頻度(ノイズ対策タスクでの変更、今回も踏襲)】
+     * XYZ加速度波形は従来どおり最大10Hz。震度階級バッジ・計測震度相当(色バー)・
+     * PGA(色バー)・履歴帯は、チカチカ対策として約1Hzに間引く。一方、
+     * リアルタイム加速度・リアルタイム震度の数値表示は、今回の仕様変更で
+     * この間引きの対象外とし、このメソッドの呼び出し頻度(uiUpdateIntervalMillis
+     * に従う、約30Hz)のまま毎回更新するようにした。
      */
     private fun updateIntensityDisplayExtension(sample: ProcessedSample) {
         val nowElapsed = SystemClock.elapsedRealtime()
@@ -281,15 +331,25 @@ class MainActivity : AppCompatActivity() {
             waveformXyz.pushValue("Z", sample.filteredZGal.toFloat(), Color.BLUE)
         }
 
-        // 震度階級・計測震度相当・加速度・履歴帯(ノイズ対策: 約1Hzに間引く)。
+        // リアルタイム加速度(数値)・リアルタイム震度(数値)は仕様変更により1Hz間引きの
+        // 対象外。このメソッドの呼び出し頻度(約30Hz)のまま、このサンプル自身の
+        // 瞬時値をそのまま表示する。
+        textMeasuredAcceleration.text = String.format(Locale.JAPAN, "%.2f gal", sample.combinedGal)
+        textMeasuredIntensity.text = if (sample.rawIntensity.isFinite()) {
+            String.format(Locale.JAPAN, "%.2f", sample.rawIntensity)
+        } else {
+            "--"
+        }
+
+        // 震度階級・計測震度相当(色バー)・PGA(色バー)・履歴帯(ノイズ対策: 約1Hzに間引く。従来どおり)。
         if (nowElapsed - lastIntensityDisplayUpdateElapsedMillis < intensityDisplayUpdateIntervalMillis) {
             return
         }
         lastIntensityDisplayUpdateElapsedMillis = nowElapsed
 
-        // ヒステリシス適用後の表示用階級(上昇は即座、下降は持続確認後)。
-        // rawIntensityそのものは一切変更していない。
-        val displayedClass = hysteresisClassifier.update(sample.rawIntensity)
+        // 計測震度相当(色バー)は、加速度と同様にこのサンプル自身の
+        // rawIntensityをそのまま使う。追加のピーク保持・平滑化は行わない。
+        val displayedClass = IntensityClass.fromRawIntensity(sample.rawIntensity)
         val classColors = IntensityClassColors.colorsFor(displayedClass)
 
         textIntensityClassBadge.text = displayedClass.label
@@ -300,21 +360,17 @@ class MainActivity : AppCompatActivity() {
             setStroke(4, classColors.border)
         }
 
-        textMeasuredIntensity.text = if (sample.rawIntensity.isFinite()) {
-            String.format(Locale.JAPAN, "%.2f", sample.rawIntensity)
-        } else {
-            "--"
-        }
-        // 計測震度の色付けは内部連続値(rawIntensity)をそのままKyoshinShindoColorMapへ。
-        // (色付けにはヒステリシスを適用していない。ヒステリシスは離散的な
-        //  「震度階級」表示のチカチカ対策であり、連続値の色は約1Hzへの
-        //  間引きだけで十分に視覚的な変化が緩やかになるため。)
+        // 計測震度相当の色バーは、リアルタイム震度と同じ値(このサンプルのrawIntensity)
+        // から算出する(数値表示と下線色が食い違わないようにするため)。
         underlineMeasuredIntensity.setBackgroundColor(KyoshinShindoColorMap.colorForIntensity(sample.rawIntensity))
 
-        textMeasuredAcceleration.text = String.format(Locale.JAPAN, "%.2f gal", sample.pgaEquivalentGal)
-        underlineMeasuredAcceleration.setBackgroundColor(KyoshinShindoColorMap.colorForPga(sample.pgaEquivalentGal))
+        // PGAの色バーは、リアルタイム加速度(combinedGal)から集計した直近1秒間の
+        // 最大値を使う(sample.pgaEquivalentGalとは別物)。取得と同時に0へ
+        // リセットし、次の1秒間の集計を開始する。
+        val pgaGal = java.lang.Double.longBitsToDouble(pgaWindowMaxGalBits.getAndSet(0L))
+        underlineMeasuredAcceleration.setBackgroundColor(KyoshinShindoColorMap.colorForPga(pgaGal))
 
-        // 履歴帯もヒステリシス適用後の表示用階級を積む(履歴帯自体もチカチカ対策の対象のため)。
+        // 履歴帯も、この1Hz更新時点の表示階級を積む。
         intensityHistoryBand.push(displayedClass)
     }
 

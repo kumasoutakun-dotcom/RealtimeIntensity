@@ -98,10 +98,9 @@ class ValidationActivity : AppCompatActivity() {
                         appendLine("誤差(丸め後の震度どうしの差) = ${"%.2f".format(roundedDiff)}")
                         appendLine()
                         appendLine("注: 気象庁公式アルゴリズムは記録区間全体を1つのFFTで処理する")
-                        appendLine("のに対し、リアルタイム版は直近10秒のスライディングウィンドウ")
-                        appendLine("内で0.3秒基準を評価している。この評価区間の違いは、特に")
-                        appendLine("継続時間の短い/長い揺れで結果に差を生む要因になり得る点に")
-                        appendLine("留意すること(ALGORITHM.md参照)。")
+                        appendLine("のに対し、リアルタイム版は現在サンプルの振幅を直接使って")
+                        appendLine("震度相当値を逐次計算する。この計算方法の違いにより、")
+                        appendLine("両者の値は一致しない場合がある(ALGORITHM.md参照)。")
                     }
                 }
             } catch (e: Exception) {
