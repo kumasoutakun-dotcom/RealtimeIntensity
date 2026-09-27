@@ -5,33 +5,30 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.example.rtintensity.R
 import kotlin.concurrent.thread
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import java.util.Locale
 
 /**
- * 要件10「検証」への対応。
- * K-NET/KiK-net ASCII形式の3成分ファイル(N-S, E-W, U-D)をユーザーに選ばせ、
- *   1) OfflineJmaIntensity.computeReferenceIntensity で「本来のFFTベース計測震度」を計算
- *   2) OfflineJmaIntensity.replayRealtimeFilter で「本アプリの漸化式リアルタイム震度」の
- *      記録区間中の最大値を計算
- * の両方を求めて誤差を画面に表示する。
- *
- * ファイルアクセスは Storage Access Framework (ACTION_OPEN_DOCUMENT) を使うため、
- * 追加の実行時ストレージ権限は不要。
+ * 気象庁の3成分CSV、または本アプリが書き出した同形式のCSVを
+ * 1ファイルで読み込み、オフライン検証する。
  */
 class ValidationActivity : AppCompatActivity() {
 
-    private var uriNS: Uri? = null
-    private var uriEW: Uri? = null
-    private var uriUD: Uri? = null
+    private var selectedUri: Uri? = null
 
     private lateinit var textPicked: TextView
     private lateinit var textResult: TextView
 
-    private val pickNS = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uriNS = it; updatePickedText() }
-    private val pickEW = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uriEW = it; updatePickedText() }
-    private val pickUD = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uriUD = it; updatePickedText() }
+    private val pickFile =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            selectedUri = uri
+            updatePickedText()
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,72 +37,135 @@ class ValidationActivity : AppCompatActivity() {
         textPicked = findViewById(R.id.textPickedFiles)
         textResult = findViewById(R.id.textResult)
 
-        findViewById<Button>(R.id.buttonPickNS).setOnClickListener { pickNS.launch(arrayOf("*/*")) }
-        findViewById<Button>(R.id.buttonPickEW).setOnClickListener { pickEW.launch(arrayOf("*/*")) }
-        findViewById<Button>(R.id.buttonPickUD).setOnClickListener { pickUD.launch(arrayOf("*/*")) }
+        findViewById<Button>(R.id.buttonPickData).setOnClickListener {
+            pickFile.launch(arrayOf("text/*", "text/csv", "application/csv", "*/*"))
+        }
         findViewById<Button>(R.id.buttonRun).setOnClickListener { runValidation() }
     }
 
     private fun updatePickedText() {
-        textPicked.text = "N-S: ${uriNS?.lastPathSegment ?: "未選択"}\n" +
-            "E-W: ${uriEW?.lastPathSegment ?: "未選択"}\n" +
-            "U-D: ${uriUD?.lastPathSegment ?: "未選択"}"
+        textPicked.text = selectedUri?.lastPathSegment
+            ?.substringAfterLast('/')
+            ?: "未選択"
     }
 
     private fun runValidation() {
-        val ns = uriNS; val ew = uriEW; val ud = uriUD
-        if (ns == null || ew == null || ud == null) {
-            Toast.makeText(this, "3成分すべてのファイルを選択してください", Toast.LENGTH_SHORT).show()
+        val uri = selectedUri
+        if (uri == null) {
+            Toast.makeText(this, "3成分CSVを選択してください", Toast.LENGTH_SHORT).show()
             return
         }
+
         textResult.text = "計算中..."
+
         thread {
             try {
-                val compNS = contentResolver.openInputStream(ns)!!.use { KNetAsciiParser.parse(it) }
-                val compEW = contentResolver.openInputStream(ew)!!.use { KNetAsciiParser.parse(it) }
-                val compUD = contentResolver.openInputStream(ud)!!.use { KNetAsciiParser.parse(it) }
+                val record =
+                    contentResolver.openInputStream(uri)!!.use { JmaCsvParser.parse(it) }
 
-                if (compNS.samplingHz != compEW.samplingHz || compNS.samplingHz != compUD.samplingHz) {
-                    runOnUiThread {
-                        textResult.text = "エラー: 3成分のサンプリング周波数が一致しません " +
-                            "(NS=${compNS.samplingHz}Hz, EW=${compEW.samplingHz}Hz, UD=${compUD.samplingHz}Hz)"
-                    }
-                    return@thread
+                val n = minOf(
+                    record.component1Gal.size,
+                    record.component2Gal.size,
+                    record.component3Gal.size
+                )
+                if (n <= 0) {
+                    throw IllegalArgumentException("加速度データがありません")
                 }
 
-                val fs = compNS.samplingHz
+                val c1 = record.component1Gal.copyOf(n)
+                val c2 = record.component2Gal.copyOf(n)
+                val c3 = record.component3Gal.copyOf(n)
+
                 val reference = OfflineJmaIntensity.computeReferenceIntensity(
-                    compNS.accelerationGal, compEW.accelerationGal, compUD.accelerationGal, fs
+                    c1, c2, c3, record.samplingHz
                 )
+                val isPhoneExport = record.axis1Label.equals("X", ignoreCase = true) &&
+                    record.axis2Label.equals("Y", ignoreCase = true) &&
+                    record.axis3Label.equals("Z", ignoreCase = true)
+
                 val realtime = OfflineJmaIntensity.replayRealtimeFilter(
-                    compNS.accelerationGal, compEW.accelerationGal, compUD.accelerationGal, fs
+                    c1, c2, c3, record.samplingHz, primeFromFirstSecond = isPhoneExport
                 )
 
-                val roundedDiff = realtime.maxRoundedIntensity - reference.referenceIntensity
+                val roundedDiff =
+                    realtime.maxRoundedIntensity - reference.referenceIntensity
+                val durationSeconds = n / record.samplingHz
 
                 runOnUiThread {
                     textResult.text = buildString {
-                        appendLine("サンプリング周波数: $fs Hz")
-                        appendLine("データ点数: ${compNS.accelerationGal.size}")
+                        appendLine("サイトコード: ${record.siteCode.ifBlank { "(未設定)" }}")
+                        appendLine("初期時刻: ${record.initialTime.ifBlank { "(未設定)" }}")
+                        appendLine(
+                            "サンプリング周波数: ${formatHz(record.samplingHz)} Hz"
+                        )
+                        appendLine("データ点数: $n")
+                        appendLine(
+                            "記録時間: ${"%.2f".format(Locale.JAPAN, durationSeconds)} s"
+                        )
+                        appendLine("単位: ${record.unit.ifBlank { "(未設定)" }}")
+                        appendLine(
+                            "3成分: ${record.axis1Label},${record.axis2Label},${record.axis3Label}"
+                        )
                         appendLine()
-                        appendLine("[本来の方式] 気象庁FFTベース計測震度(この区間全体):")
-                        appendLine("  I(JMA公式アルゴリズム) = ${reference.referenceIntensity}")
+                        appendLine("[気象庁方式] FFTベース計測震度(区間全体)")
+                        appendLine(
+                            "  計測震度 = ${formatIntensity(reference.referenceIntensity)}"
+                        )
+                        appendLine(
+                            "  基準振幅 a = ${"%.3f".format(
+                                Locale.JAPAN,
+                                reference.amplitudeGal
+                            )} gal"
+                        )
                         appendLine()
-                        appendLine("[本アプリの方式] 漸化式リアルタイム震度の区間中最大値:")
-                        appendLine("  I(リアルタイム,丸め後) = ${realtime.maxRoundedIntensity}")
-                        appendLine("  I(リアルタイム,丸め前) = ${"%.4f".format(realtime.maxRawIntensity)}")
+                        appendLine("[本アプリ方式] 漸化式リアルタイム震度")
+                        appendLine(
+                            "  区間中最大(丸め後) = ${
+                                formatIntensity(realtime.maxRoundedIntensity)
+                            }"
+                        )
+                        appendLine(
+                            "  区間中最大(丸め前) = ${
+                                "%.4f".format(Locale.JAPAN, realtime.maxRawIntensity)
+                            }"
+                        )
                         appendLine()
-                        appendLine("誤差(丸め後の震度どうしの差) = ${"%.2f".format(roundedDiff)}")
+                        appendLine(
+                            "差(丸め後) = ${
+                                "%.2f".format(Locale.JAPAN, roundedDiff)
+                            }"
+                        )
                         appendLine()
-                        appendLine("注: 気象庁公式アルゴリズムは記録区間全体を1つのFFTで処理する")
-                        appendLine("のに対し、リアルタイム版は現在サンプルの振幅を直接使って")
-                        appendLine("震度相当値を逐次計算する。この計算方法の違いにより、")
-                        appendLine("両者の値は一致しない場合がある(ALGORITHM.md参照)。")
+                        appendLine("注: 気象庁方式は記録区間全体をFFTで処理するのに対し、")
+                        appendLine("本アプリ方式は各サンプルを漸化式フィルタへ順次入力し、")
+                        appendLine("現在サンプルの振幅からリアルタイム震度相当値を求める。")
+                        appendLine("そのため、同じ波形でも両者は一致しない場合がある。")
+                        if (isPhoneExport) {
+                            appendLine()
+                            appendLine("X/Y/Zの本アプリ書き出しデータでは、起動時過渡応答を")
+                            appendLine("再現しないよう先頭約1秒の平均値でフィルタを初期化しています。")
+                        }
+                        if (record.latitude.isBlank() || record.longitude.isBlank()) {
+                            appendLine()
+                            appendLine("注: 緯度・経度はファイルに記録されていません。")
+                        }
                     }
                 }
             } catch (e: Exception) {
-                runOnUiThread { textResult.text = "エラー: ${e.message}" }
+                runOnUiThread {
+                    textResult.text = "エラー: ${e.message ?: e::class.simpleName}"
+                }
             }
         }
     }
+
+    private fun formatHz(value: Double): String =
+        if (abs(value - value.roundToInt()) < 1e-9) {
+            value.roundToInt().toString()
+        } else {
+            "%.3f".format(Locale.JAPAN, value)
+        }
+
+    private fun formatIntensity(value: Double): String =
+        if (value.isFinite()) "%.2f".format(Locale.JAPAN, value) else "--"
 }

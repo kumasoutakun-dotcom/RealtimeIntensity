@@ -105,13 +105,44 @@ object OfflineJmaIntensity {
      * 「本来のFFTベースの計測震度」と「本アプリの漸化式近似」の誤差を
      * 定量的に確認できる(要件10)。
      */
-    fun replayRealtimeFilter(ns: DoubleArray, ew: DoubleArray, ud: DoubleArray, samplingHz: Double): RealtimeReplayResult {
+    fun replayRealtimeFilter(
+        ns: DoubleArray,
+        ew: DoubleArray,
+        ud: DoubleArray,
+        samplingHz: Double,
+        primeFromFirstSecond: Boolean = false
+    ): RealtimeReplayResult {
         val n = minOf(ns.size, ew.size, ud.size)
         val dt = 1.0 / samplingHz
         val fx = RealtimeIntensityFilter().also { it.configure(dt) }
         val fy = RealtimeIntensityFilter().also { it.configure(dt) }
         val fz = RealtimeIntensityFilter().also { it.configure(dt) }
         val calc = IntensityCalculator(dt)
+
+        // 本アプリの書き出しデータは、オンライン計測時にすでに
+        // 1秒ウォームアップを終えた後の生加速度から始まるため、
+        // オフライン再生をゼロ状態から始めると重力によるIIR過渡応答を
+        // 再び作ってしまう。X/Y/Z書き出しだけは先頭1秒の平均値を
+        // 5秒分の仮想入力として流し、オンライン側のプライミングに近い
+        // 初期状態にしてから実データを処理する。
+        if (primeFromFirstSecond && n > 0) {
+            val primeCount = minOf(n, maxOf(1, kotlin.math.ceil(samplingHz).toInt()))
+            var sx = 0.0
+            var sy = 0.0
+            var sz = 0.0
+            for (i in 0 until primeCount) {
+                sx += ns[i]
+                sy += ew[i]
+                sz += ud[i]
+            }
+            val mx = sx / primeCount
+            val my = sy / primeCount
+            val mz = sz / primeCount
+            val virtualSamples = maxOf(1, kotlin.math.ceil(5.0 / dt).toInt())
+            fx.prime(mx, virtualSamples)
+            fy.prime(my, virtualSamples)
+            fz.prime(mz, virtualSamples)
+        }
 
         var maxRaw = Double.NEGATIVE_INFINITY
         for (i in 0 until n) {

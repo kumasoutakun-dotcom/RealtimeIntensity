@@ -31,6 +31,7 @@ class WaveformView @JvmOverloads constructor(
     private val filledCounts = HashMap<String, Int>()
     private var capacity = 300
 
+    private val backgroundPaint = Paint().apply { color = Color.parseColor("#1F3153"); style = Paint.Style.FILL; isAntiAlias = true }
     private val linePaint = Paint().apply { strokeWidth = 3f; style = Paint.Style.STROKE; isAntiAlias = true }
     private val axisPaint = Paint().apply { color = Color.LTGRAY; strokeWidth = 1f }
     private val defaultColors = intArrayOf(
@@ -82,6 +83,9 @@ class WaveformView @JvmOverloads constructor(
         super.onDraw(canvas)
         val w = width.toFloat()
         val h = height.toFloat()
+        canvas.drawRoundRect(0f, 0f, w, h, 20f, 20f, backgroundPaint)
+        canvas.save()
+        canvas.clipRect(0f, 0f, w, h)
         canvas.drawLine(0f, h / 2f, w, h / 2f, axisPaint)
 
         var maxAbs = 1e-6f
@@ -106,5 +110,6 @@ class WaveformView @JvmOverloads constructor(
                 prevX = x; prevY = y
             }
         }
+        canvas.restore()
     }
 }

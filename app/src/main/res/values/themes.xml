@@ -1,3 +1,14 @@
 <resources>
-    <style name="Theme.RtIntensity" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+    <style name="Theme.RtIntensity" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:fontFamily">@font/genzen_gothic_kai_c</item>
+        <item name="fontFamily">@font/genzen_gothic_kai_c</item>
+        <item name="android:windowBackground">#000049</item>
+        <item name="android:navigationBarColor">#000049</item>
+        <item name="android:statusBarColor">#000049</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:colorAccent">#AFC2FF</item>
+        <item name="android:textColorPrimary">#F3F6FF</item>
+        <item name="android:textColorSecondary">#C0C8D8</item>
+    </style>
 </resources>

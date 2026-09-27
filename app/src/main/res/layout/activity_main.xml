@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -7,7 +8,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="10dp">
+    android:padding="10dp"
+    android:background="#000049">
 
     <!--
       コンパクトな計測モニター用の2列レイアウト。
@@ -22,8 +24,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#26314A"
-        android:padding="10dp">
+        android:background="@drawable/bg_intensity_card"
+        android:elevation="4dp"
+        android:clipToOutline="true"
+        android:padding="14dp">
 
         <!-- 行1: 左上=震度階級 / 右上=震度推移 -->
         <LinearLayout
@@ -36,7 +40,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical"
+                android:orientation="horizontal"
                 android:gravity="center_vertical">
 
                 <TextView
@@ -44,21 +48,31 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/label_intensity_class"
-                    android:textSize="12sp"
-                    android:textColor="#C0C8D8" />
+                    android:textSize="20sp"
+                    android:textColor="#C0C8D8" 
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
                 <TextView
                     android:id="@+id/textIntensityClassBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:paddingStart="14dp"
-                    android:paddingEnd="14dp"
-                    android:paddingTop="2dp"
-                    android:paddingBottom="2dp"
+                    android:layout_width="80dp"
+                    android:minWidth="80dp"
+                    android:layout_height="50dp"
+                    android:layout_marginStart="6dp"
+                    android:padding="0dp"
+                    android:paddingStart="0dp"
+                    android:paddingEnd="0dp"
+                    android:paddingLeft="0dp"
+                    android:paddingRight="0dp"
+                    android:gravity="center"
+                    android:textAlignment="center"
                     android:text="--"
-                    android:textSize="24sp"
-                    android:textStyle="bold" />
+                    android:textSize="32sp"
+                    android:textStyle="bold" 
+        android:includeFontPadding="false"
+    />
             </LinearLayout>
 
             <!-- 右上: 震度推移(履歴帯) -->
@@ -74,7 +88,11 @@
                     android:layout_height="wrap_content"
                     android:text="@string/label_intensity_history"
                     android:textSize="12sp"
-                    android:textColor="#C0C8D8" />
+                    android:textColor="#C0C8D8" 
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
                 <com.example.rtintensity.ui.IntensityHistoryBandView
                     android:id="@+id/intensityHistoryBand"
@@ -98,20 +116,37 @@
                 android:layout_weight="1"
                 android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/label_measured_intensity"
-                    android:textSize="11sp"
-                    android:textColor="#C0C8D8" />
-                <TextView
-                    android:id="@+id/textMeasuredIntensity"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="--"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="start"
+                        android:text="リアルタイム震度:"
+                        android:textSize="13sp"
+                        android:textColor="#C0C8D8"
+                        android:includeFontPadding="false"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp" />
+
+                    <TextView
+                        android:id="@+id/textMeasuredIntensity"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="--"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF"
+                        android:includeFontPadding="false"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp" />
+                </LinearLayout>
                 <!--
                   計測震度相当の現在値を、100段階色マップ(KyoshinShindoColorMap)で
                   1色に変換した単色バー(時間履歴ではない)。色決定処理は
@@ -124,21 +159,38 @@
                     android:layout_marginTop="2dp"
                     android:background="#808080" />
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="@string/label_measured_acceleration"
-                    android:textSize="11sp"
-                    android:textColor="#C0C8D8" />
-                <TextView
-                    android:id="@+id/textMeasuredAcceleration"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="--"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="start"
+                        android:text="リアルタイム加速度:"
+                        android:textSize="13sp"
+                        android:textColor="#C0C8D8"
+                        android:includeFontPadding="false"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp" />
+
+                    <TextView
+                        android:id="@+id/textMeasuredAcceleration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:text="--"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF"
+                        android:includeFontPadding="false"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp" />
+                </LinearLayout>
                 <!-- 加速度(PGA相当)の現在値による単色バー(時間履歴ではない)。 -->
                 <View
                     android:id="@+id/underlineMeasuredAcceleration"
@@ -161,11 +213,15 @@
                     android:layout_height="wrap_content"
                     android:text="@string/label_xyz_displacement"
                     android:textSize="11sp"
-                    android:textColor="#C0C8D8" />
+                    android:textColor="#C0C8D8" 
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
                 <com.example.rtintensity.ui.WaveformView
                     android:id="@+id/waveformXyz"
                     android:layout_width="match_parent"
-                    android:layout_height="118dp"
+                    android:layout_height="80dp"
                     android:layout_marginTop="4dp" />
             </LinearLayout>
         </LinearLayout>
@@ -176,7 +232,11 @@
             android:layout_marginTop="6dp"
             android:text="@string/credit_kyoshin_shindo_color_map"
             android:textSize="9sp"
-            android:textColor="#8C94A6" />
+            android:textColor="#8C94A6" 
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
     </LinearLayout>
 
@@ -187,7 +247,11 @@
         android:layout_marginTop="6dp"
         android:text="@string/label_disclaimer"
         android:textSize="10sp"
-        android:textColor="#808080" />
+        android:textColor="#808080" 
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
     <!--
       下部の詳細情報。上部の2列モニターと完全に重複する項目
@@ -198,17 +262,43 @@
     <GridLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_secondary_card"
+        android:padding="12dp"
         android:columnCount="2">
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="サンプリング周波数" android:layout_column="0" android:layout_row="0"/>
-        <TextView android:id="@+id/textSampleRate" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- Hz" android:layout_column="1" android:layout_row="0"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="サンプリング周波数" android:layout_column="0" android:layout_row="0"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
+        <TextView android:id="@+id/textSampleRate" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- Hz" android:layout_column="1" android:layout_row="0"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="センサー状態" android:layout_column="0" android:layout_row="1"/>
-        <TextView android:id="@+id/textSensorStatus" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="未取得" android:layout_column="1" android:layout_row="1"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="センサー状態" android:layout_column="0" android:layout_row="1"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
+        <TextView android:id="@+id/textSensorStatus" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="未取得" android:layout_column="1" android:layout_row="1"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="静止時オフセット(平均±標準偏差,gal)" android:layout_column="0" android:layout_row="2"/>
-        <TextView android:id="@+id/textCalibration" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="計測中..." android:layout_column="1" android:layout_row="2"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="静止時オフセット(平均±標準偏差,gal)" android:layout_column="0" android:layout_row="2"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
+        <TextView android:id="@+id/textCalibration" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="計測中..." android:layout_column="1" android:layout_row="2"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
     </GridLayout>
 
@@ -219,7 +309,11 @@
         android:layout_marginTop="10dp" />
     <TextView
         android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="生の3軸合成加速度(フィルタ前)" android:textSize="11sp"/>
+        android:text="生の3軸合成加速度(フィルタ前)" android:textSize="11sp"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
     <com.example.rtintensity.ui.WaveformView
         android:id="@+id/waveformFiltered"
@@ -228,7 +322,11 @@
         android:layout_marginTop="6dp" />
     <TextView
         android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="フィルタ後の3軸合成加速度" android:textSize="11sp"/>
+        android:text="フィルタ後の3軸合成加速度" android:textSize="11sp"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
     <com.example.rtintensity.ui.WaveformView
         android:id="@+id/waveformIntensity"
@@ -237,7 +335,11 @@
         android:layout_marginTop="6dp" />
     <TextView
         android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="リアルタイム震度相当値の推移" android:textSize="11sp"/>
+        android:text="リアルタイム震度相当値の推移" android:textSize="11sp"
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -245,20 +347,67 @@
         android:layout_marginTop="10dp"
         android:orientation="horizontal">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonStartStop"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/btn_start" />
+            android:text="@string/btn_start"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:minHeight="52dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            app:cornerRadius="20dp"
+            app:strokeWidth="0dp"
+            app:backgroundTint="#8FA7E8"
+            android:textColor="#102046"
+            android:includeFontPadding="false"
+        />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonValidation"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/btn_validation" />
+            android:text="@string/btn_validation"
+            android:textAllCaps="false"
+            android:textSize="15sp"
+            android:minHeight="52dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            app:cornerRadius="20dp"
+            app:strokeWidth="0dp"
+            app:backgroundTint="#3A527D"
+            android:textColor="#F3F6FF"
+            android:includeFontPadding="false"
+        />
     </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonExportData"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/btn_export_data"
+        android:textAllCaps="false"
+        android:textSize="15sp"
+        android:minHeight="48dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        app:cornerRadius="20dp"
+        app:strokeWidth="0dp"
+        app:backgroundTint="#3A527D"
+        android:textColor="#F3F6FF"
+        android:enabled="false"
+        android:includeFontPadding="false"
+    />
 
     <TextView
         android:id="@+id/textRecordingStatus"
@@ -266,7 +415,11 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:text=""
-        android:textSize="12sp" />
+        android:textSize="12sp" 
+        android:includeFontPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+    />
 
 </LinearLayout>
 </ScrollView>

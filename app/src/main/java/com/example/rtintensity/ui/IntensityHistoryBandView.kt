@@ -3,6 +3,7 @@ package com.example.rtintensity.ui
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Color
 import android.util.AttributeSet
 import android.view.View
 import com.example.rtintensity.color.IntensityClassColors
@@ -35,6 +36,7 @@ class IntensityHistoryBandView @JvmOverloads constructor(
     private var writeIndex = 0
     private var filled = 0
 
+    private val backgroundPaint = Paint().apply { color = Color.parseColor("#1F3153"); style = Paint.Style.FILL; isAntiAlias = true }
     private val fillPaint = Paint()
 
     /**
@@ -73,7 +75,13 @@ class IntensityHistoryBandView @JvmOverloads constructor(
         super.onDraw(canvas)
         val w = width.toFloat()
         val h = height.toFloat()
-        if (filled == 0) return
+        canvas.drawRoundRect(0f, 0f, w, h, 16f, 16f, backgroundPaint)
+        canvas.save()
+        canvas.clipRect(0f, 0f, w, h)
+        if (filled == 0) {
+            canvas.restore()
+            return
+        }
 
         val oldestPos = if (filled < classes.size) 0 else writeIndex
         val cellWidth = w / classes.size
@@ -87,5 +95,6 @@ class IntensityHistoryBandView @JvmOverloads constructor(
             val left = leftPad + i * cellWidth
             canvas.drawRect(left, 0f, left + cellWidth + 1f, h, fillPaint)
         }
+        canvas.restore()
     }
 }

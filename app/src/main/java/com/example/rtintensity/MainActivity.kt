@@ -1,6 +1,7 @@
 package com.example.rtintensity
 
 import android.content.Intent
+import android.net.Uri
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -9,11 +10,12 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.example.rtintensity.color.IntensityClassColors
 import com.example.rtintensity.color.KyoshinShindoColorMap
-import com.example.rtintensity.processor.IntensityClass
 import com.example.rtintensity.processor.CalibrationMonitor
+import com.example.rtintensity.processor.IntensityClass
 import com.example.rtintensity.processor.ProcessedSample
 import com.example.rtintensity.processor.SeismicProcessor
 import com.example.rtintensity.recorder.CsvRecorder
@@ -36,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textCalibration: TextView
     private lateinit var textRecordingStatus: TextView
     private lateinit var buttonStartStop: Button
+    private lateinit var buttonExportData: com.google.android.material.button.MaterialButton
 
     private lateinit var waveformRaw: WaveformView
     private lateinit var waveformFiltered: WaveformView
@@ -51,6 +54,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var waveformXyz: WaveformView
 
     private var isMeasuring = false
+
+    private val createExportDocument =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri: Uri? ->
+            if (uri == null) return@registerForActivityResult
+            threadExportCsv(uri)
+        }
 
     // ---- UI更新スロットリング(要件2): センサーコールバックとは切り離し、
     //      最大でこの間隔(既定約30fps)でしかUIスレッドに投げない。 ----
@@ -84,6 +93,14 @@ class MainActivity : AppCompatActivity() {
     // あくまで人間向けの表示部分のみ。
     private val intensityDisplayUpdateIntervalMillis = 1000L
     private var lastIntensityDisplayUpdateElapsedMillis = 0L
+
+    // ---- 震度推移帯の時間軸用更新スロットリング ----
+    // 震度階級そのものの判定・バッジ/色の更新は1Hzのまま維持する。
+    // 一方、履歴帯には「最後に確定した震度階級」を10Hzで繰り返し積むことで、
+    // 100コマ=約10秒となり、XYZ加速度波形(10Hz・100コマ)と同じ時間軸になる。
+    private val intensityHistoryUpdateIntervalMillis = 100L
+    private var lastIntensityHistoryUpdateElapsedMillis = 0L
+    private var lastDisplayedIntensityClass: IntensityClass? = null
 
     // ---- PGA(1Hz色バー)用: 直近1秒間の combinedGal 最大値を集計する(仕様変更) ----
     // combinedGal(フィルタ後3軸合成の瞬時値)は handleSample() (センサー用の
@@ -131,6 +148,14 @@ class MainActivity : AppCompatActivity() {
         textCalibration = findViewById(R.id.textCalibration)
         textRecordingStatus = findViewById(R.id.textRecordingStatus)
         buttonStartStop = findViewById(R.id.buttonStartStop)
+        buttonExportData = findViewById(R.id.buttonExportData)
+        buttonExportData.isEnabled = false
+
+        buttonExportData.setOnClickListener {
+            if (isMeasuring) return@setOnClickListener
+            val suggested = csvRecorder.currentFileName() ?: "rtintensity.csv"
+            createExportDocument.launch(suggested)
+        }
 
         waveformRaw = findViewById(R.id.waveformRaw)
         waveformFiltered = findViewById(R.id.waveformFiltered)
@@ -143,12 +168,8 @@ class MainActivity : AppCompatActivity() {
         underlineMeasuredAcceleration = findViewById(R.id.underlineMeasuredAcceleration)
         intensityHistoryBand = findViewById(R.id.intensityHistoryBand)
         waveformXyz = findViewById(R.id.waveformXyz)
-        // コマ数(容量)は同じ100のままにしているが、更新頻度が異なる
-        // (xyz波形=10Hz→約10秒分、履歴帯=約1Hz→約100秒分)ため、
-        // 両者が示す時間幅は今回の変更でもう一致しない。これは
-        // 「XYZ波形は現状維持、震度階級・履歴帯は約1Hzに低下」という
-        // 今回の指示を文字通り適用した結果であり、意図的な選択である
-        // (時間幅を再び揃えたい場合は、別途容量の調整を検討すること)。
+        // コマ数(容量)は同じ100。XYZ波形は10Hz、履歴帯も直近の確定階級を
+        // 10Hzで記録するため、どちらも100コマ=約10秒分となる。
         intensityHistoryBand.setCapacity(HISTORY_CAPACITY)
         waveformXyz.setCapacity(HISTORY_CAPACITY)
 
@@ -164,6 +185,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startMeasuring() {
+        buttonExportData.isEnabled = false
         if (!accelerometerSource.isAvailable) {
             textSensorStatus.text = "加速度センサーが利用できません"
             return
@@ -174,6 +196,8 @@ class MainActivity : AppCompatActivity() {
         lastUiUpdateElapsedMillis = 0L
         lastXyzWaveformUpdateElapsedMillis = 0L
         lastIntensityDisplayUpdateElapsedMillis = 0L
+        lastIntensityHistoryUpdateElapsedMillis = 0L
+        lastDisplayedIntensityClass = null
         pgaWindowMaxGalBits.set(0L)
         intensityHistoryBand.clear()
         waveformXyz.clearAll()
@@ -208,6 +232,30 @@ class MainActivity : AppCompatActivity() {
         isMeasuring = false
         buttonStartStop.text = getString(R.string.btn_start)
         textRecordingStatus.text = "記録を停止しました: ${csvRecorder.currentFilePath()}"
+        buttonExportData.isEnabled = csvRecorder.hasRecordedData()
+    }
+
+    private fun threadExportCsv(uri: Uri) {
+        buttonExportData.isEnabled = false
+
+        Thread {
+            val success = try {
+                csvRecorder.exportTo(uri)
+            } catch (e: Exception) {
+                Log.e(TAG, "CSV書き出しに失敗", e)
+                false
+            }
+
+            runOnUiThread {
+                buttonExportData.isEnabled =
+                    csvRecorder.hasRecordedData() && !isMeasuring
+                textRecordingStatus.text = if (success) {
+                    "CSVを書き出しました"
+                } else {
+                    "CSVの書き出しに失敗しました"
+                }
+            }
+        }.start()
     }
 
     /**
@@ -309,9 +357,11 @@ class MainActivity : AppCompatActivity() {
      *   - 計測震度相当(underlineMeasuredIntensity, 色バー, 1Hz):
      *     リアルタイム震度と同じsample.rawIntensityから色を算出する。
      *     色バーの更新頻度のみ1Hzに保つ(チカチカ対策、従来どおり)。
-     *   - 震度階級(textIntensityClassBadge・intensityHistoryBand,
-     *     バッジ+履歴帯, 1Hz): sample.rawIntensityから直接判定する。
-     *     表示更新は従来どおり1Hzのままにして、表示上のチカチカを抑える。
+     *   - 震度階級(textIntensityClassBadge, バッジ, 1Hz): sample.rawIntensityから
+     *     直接判定する。表示更新は1Hzのままにして、表示上のチカチカを抑える。
+     *   - 履歴帯(intensityHistoryBand, 10Hz): 1Hzで確定した直近の震度階級を
+     *     10Hzで繰り返し記録する。階級の判定頻度は変えず、時間軸だけをXYZ加速度波形
+     *     (10Hz)と揃える。
      *
      * 【更新頻度(ノイズ対策タスクでの変更、今回も踏襲)】
      * XYZ加速度波形は従来どおり最大10Hz。震度階級バッジ・計測震度相当(色バー)・
@@ -334,44 +384,52 @@ class MainActivity : AppCompatActivity() {
         // リアルタイム加速度(数値)・リアルタイム震度(数値)は仕様変更により1Hz間引きの
         // 対象外。このメソッドの呼び出し頻度(約30Hz)のまま、このサンプル自身の
         // 瞬時値をそのまま表示する。
-        textMeasuredAcceleration.text = String.format(Locale.JAPAN, "%.2f gal", sample.combinedGal)
+        textMeasuredAcceleration.text = String.format(Locale.JAPAN, "%.2fgal", sample.combinedGal)
         textMeasuredIntensity.text = if (sample.rawIntensity.isFinite()) {
             String.format(Locale.JAPAN, "%.2f", sample.rawIntensity)
         } else {
             "--"
         }
 
-        // 震度階級・計測震度相当(色バー)・PGA(色バー)・履歴帯(ノイズ対策: 約1Hzに間引く。従来どおり)。
-        if (nowElapsed - lastIntensityDisplayUpdateElapsedMillis < intensityDisplayUpdateIntervalMillis) {
-            return
+        // 震度階級・計測震度相当(色バー)・PGA(色バー)は、ノイズ対策として約1Hzで更新する。
+        // 震度階級そのものの確定値はここで更新し、履歴帯は下で別途10Hzで進める。
+        if (nowElapsed - lastIntensityDisplayUpdateElapsedMillis >= intensityDisplayUpdateIntervalMillis) {
+            lastIntensityDisplayUpdateElapsedMillis = nowElapsed
+
+            // 計測震度相当(色バー)は、加速度と同様にこのサンプル自身の
+            // rawIntensityをそのまま使う。追加のピーク保持・平滑化は行わない。
+            val displayedClass = IntensityClass.fromRawIntensity(sample.rawIntensity)
+            val classColors = IntensityClassColors.colorsFor(displayedClass)
+            lastDisplayedIntensityClass = displayedClass
+
+            textIntensityClassBadge.text = displayedClass.label
+            textIntensityClassBadge.setTextColor(classColors.text)
+            textIntensityClassBadge.background = GradientDrawable().apply {
+                cornerRadius = 18f
+                setColor(classColors.background)
+                setStroke(3, classColors.border)
+            }
+
+            // 計測震度相当の色バーは、リアルタイム震度と同じ値(このサンプルのrawIntensity)
+            // から算出する(数値表示と下線色が食い違わないようにするため)。
+            underlineMeasuredIntensity.setBackgroundColor(KyoshinShindoColorMap.colorForIntensity(sample.rawIntensity))
+
+            // PGAの色バーは、リアルタイム加速度(combinedGal)から集計した直近1秒間の
+            // 最大値を使う(sample.pgaEquivalentGalとは別物)。取得と同時に0へ
+            // リセットし、次の1秒間の集計を開始する。
+            val pgaGal = java.lang.Double.longBitsToDouble(pgaWindowMaxGalBits.getAndSet(0L))
+            underlineMeasuredAcceleration.setBackgroundColor(KyoshinShindoColorMap.colorForPga(pgaGal))
         }
-        lastIntensityDisplayUpdateElapsedMillis = nowElapsed
 
-        // 計測震度相当(色バー)は、加速度と同様にこのサンプル自身の
-        // rawIntensityをそのまま使う。追加のピーク保持・平滑化は行わない。
-        val displayedClass = IntensityClass.fromRawIntensity(sample.rawIntensity)
-        val classColors = IntensityClassColors.colorsFor(displayedClass)
-
-        textIntensityClassBadge.text = displayedClass.label
-        textIntensityClassBadge.setTextColor(classColors.text)
-        textIntensityClassBadge.background = GradientDrawable().apply {
-            cornerRadius = 12f
-            setColor(classColors.background)
-            setStroke(4, classColors.border)
+        // 履歴帯だけは、直近の確定階級を10Hzで繰り返し積む。
+        // これにより「階級の更新頻度は1Hzのまま」でも、時間軸はXYZ波形と一致する。
+        val historyClass = lastDisplayedIntensityClass
+        if (historyClass != null &&
+            nowElapsed - lastIntensityHistoryUpdateElapsedMillis >= intensityHistoryUpdateIntervalMillis
+        ) {
+            lastIntensityHistoryUpdateElapsedMillis = nowElapsed
+            intensityHistoryBand.push(historyClass)
         }
-
-        // 計測震度相当の色バーは、リアルタイム震度と同じ値(このサンプルのrawIntensity)
-        // から算出する(数値表示と下線色が食い違わないようにするため)。
-        underlineMeasuredIntensity.setBackgroundColor(KyoshinShindoColorMap.colorForIntensity(sample.rawIntensity))
-
-        // PGAの色バーは、リアルタイム加速度(combinedGal)から集計した直近1秒間の
-        // 最大値を使う(sample.pgaEquivalentGalとは別物)。取得と同時に0へ
-        // リセットし、次の1秒間の集計を開始する。
-        val pgaGal = java.lang.Double.longBitsToDouble(pgaWindowMaxGalBits.getAndSet(0L))
-        underlineMeasuredAcceleration.setBackgroundColor(KyoshinShindoColorMap.colorForPga(pgaGal))
-
-        // 履歴帯も、この1Hz更新時点の表示階級を積む。
-        intensityHistoryBand.push(displayedClass)
     }
 
     override fun onDestroy() {
@@ -384,8 +442,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        // コマ数(容量)。xyz波形(10Hz)では約10秒分、履歴帯(約1Hz)では
-        // 約100秒分に相当する(上のfindViewById直後のコメントを参照)。
+        // コマ数(容量)。XYZ波形(10Hz)と履歴帯(10Hz)のどちらも約10秒分。
         private const val HISTORY_CAPACITY = 100
     }
 }
